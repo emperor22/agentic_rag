@@ -7,15 +7,15 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from dotenv import load_dotenv
 import os
 
+from config import config
+
 load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
-PDF_FILENAME = 'memory_langchain.pdf'
-
 
 embeddings = OpenAIEmbeddings(
-    model="qwen/qwen3-embedding-8b",
-    base_url="https://openrouter.ai/api/v1",
+    model=config.EMBEDDING_MODEL,
+    base_url=config.BASE_URL,
     api_key=OPENROUTER_API_KEY,
 )
 
@@ -39,14 +39,14 @@ def load_and_split_pdf(file_path: str):
 
     return chunks
 
-def build_chroma_from_pdf(file_path: str, persist_dir: str = "./chroma_db"):
+def build_chroma_from_pdf(file_path: str):
     chunks = load_and_split_pdf(file_path)
 
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
-        collection_name="pdf_collection",
-        persist_directory=persist_dir,
+        collection_name=config.COLLECTION_NAME,
+        persist_directory=config.CHROMA_PERSIST_DIR,
     )
 
     vectorstore.persist()
@@ -54,4 +54,4 @@ def build_chroma_from_pdf(file_path: str, persist_dir: str = "./chroma_db"):
 
 
 if __name__ == '__main__':
-    build_chroma_from_pdf(PDF_FILENAME)
+    build_chroma_from_pdf(config.PDF_FILENAME)

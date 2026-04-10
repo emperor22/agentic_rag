@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 import os
 from dotenv import load_dotenv
 
+from config import config
+
 
 load_dotenv()
 
@@ -19,26 +21,26 @@ OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
     
 llm = ChatOpenAI(
-    model="x-ai/grok-4.1-fast",
-    base_url="https://openrouter.ai/api/v1",
+    model=config.PRIMARY_MODEL,
+    base_url=config.BASE_URL,
     api_key=OPENROUTER_API_KEY,
     temperature=0,
 )
 
 
 embeddings = OpenAIEmbeddings(
-    model="qwen/qwen3-embedding-8b",
-    base_url="https://openrouter.ai/api/v1",
+    model=config.EMBEDDING_MODEL,
+    base_url=config.BASE_URL,
     api_key=OPENROUTER_API_KEY,
 )
 
 vectorstore = Chroma(
-    collection_name="pdf_collection",
+    collection_name=config.COLLECTION_NAME,
     embedding_function=embeddings,
-    persist_directory="./chroma_db",
+    persist_directory=config.CHROMA_PERSIST_DIR,
 )
 
-retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
+retriever = vectorstore.as_retriever(search_kwargs={"k": config.RETRIEVER_K})
 
 tavily = TavilyClient(api_key=TAVILY_API_KEY)
 
@@ -47,7 +49,7 @@ tavily = TavilyClient(api_key=TAVILY_API_KEY)
 def web_search(query: str):
     response = tavily.search(
         query=query,
-        max_results=3,
+        max_results=config.TAVILY_RESULTS,
     )
 
     docs = []
@@ -111,7 +113,7 @@ def retrieve_node(state: AgentState):
 def rerank_node(state: AgentState):
     import requests
 
-    docs = state["docs"][:10]
+    docs = state["docs"][:config.RETRIEVER_K]
 
     if not docs:
         return {
@@ -120,21 +122,21 @@ def rerank_node(state: AgentState):
         }
 
     response = requests.post(
-        "https://openrouter.ai/api/v1/rerank",
+        config.BASE_URL_RERANK,
         headers={
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         },
         json={
-            "model": "cohere/rerank-4-fast",
+            "model": config.RERANK_MODEL,
             "query": state["rewritten_query"],
             "documents": [d.page_content for d in docs],
-            "top_n": 4,
+            "top_n": config.RERANK_TOP_N,
         },
     )
 
     if response.status_code != 200:
-        return {"docs": docs[:4]}
+        return {"docs": docs[:config.RERANK_TOP_N]}
 
     data = response.json()
 
@@ -196,7 +198,8 @@ def check_grounding(state):
     if state.get("check"):
         return "done"
     
-    if state.get("retries", 0) >= 3 or state.get("web_retries", 0) >= 2:
+    if (state.get("retries", 0) >= config.MAX_RAG_RETRIES or 
+        state.get("web_retries", 0) >= config.MAX_WEB_RETRIES):
         return "done"
 
     if state.get("no_docs"):
@@ -218,7 +221,7 @@ def context_check_node(state):
     Does this query depend on previous conversation?
 
     Chat history:
-    {state.get("chat_history", [])[-3:]}
+    {state.get("chat_history", [])[-config.CHAT_HISTORY_WINDOW:]}
 
     Query:
     {state["rewritten_query"]}
@@ -235,7 +238,7 @@ def rewrite_node(state: AgentState):
     Do not lose important details.
 
     Chat history:
-    {state['chat_history'][-3:]}
+    {state['chat_history'][-config.CHAT_HISTORY_WINDOW:]}
 
     Query:
     {state['query']}
