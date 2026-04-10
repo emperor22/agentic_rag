@@ -1,49 +1,22 @@
-from typing import TypedDict, Literal
-from langgraph.graph import StateGraph, START, END
+
+from schema import AgentState, RouteDecision, GroundingCheck, ContextDecision
+
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 
-from pydantic import BaseModel
-from typing import Literal
-
 from tavily import TavilyClient
 from langchain_core.documents import Document
 from dotenv import load_dotenv
+
 import os
+from dotenv import load_dotenv
+
 
 load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
-
-class AgentState(TypedDict):
-    query: str
-    rewritten_query: str
-    use_history: bool
-    route: str
-    docs: list
-    answer: str
-    check: bool
-    not_grounded_explanation: str
-    source: str
-    retries: int
-    web_retries: int
-    chat_history: list
-    no_docs: bool
-    
-    
-class RouteDecision(BaseModel):
-    route: Literal["rag", "chat", "end"]
-    
-class ContextDecision(BaseModel):
-    use_history: bool
-    
-class GroundingCheck(BaseModel):
-    grounded: bool
-    explanation: str
-    
-
     
 llm = ChatOpenAI(
     model="x-ai/grok-4.1-fast",
@@ -67,12 +40,9 @@ vectorstore = Chroma(
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
 
-
-##############
-
-
-
 tavily = TavilyClient(api_key=TAVILY_API_KEY)
+
+
 
 def web_search(query: str):
     response = tavily.search(
@@ -100,7 +70,6 @@ def web_search_node(state: AgentState):
         "no_docs": False
     }
 
-#############
 
 def router_node(state):
     llm_structured = llm.with_structured_output(RouteDecision)
@@ -290,96 +259,3 @@ def chat_node(state: AgentState):
 def route_decision(state: AgentState):
     return state["route"]
     
-    
-
-from langgraph.graph import StateGraph, START, END
-
-builder = StateGraph(AgentState)
-
-
-builder.add_node("context_check", context_check_node)
-builder.add_node("rewrite", rewrite_node)
-builder.add_node("router", router_node)
-
-builder.add_node("retrieve", retrieve_node)
-builder.add_node("web_search", web_search_node)
-builder.add_node("rerank", rerank_node)
-builder.add_node("generate", generate_node)
-builder.add_node("self_check", self_check_node)
-
-builder.add_node("chat", chat_node)
-
-
-builder.add_edge(START, "context_check")
-builder.add_edge("context_check", "rewrite")
-builder.add_edge("rewrite", "router")
-
-builder.add_conditional_edges(
-    "router",
-    route_decision,
-    {
-        "rag": "retrieve",
-        "chat": "chat",
-        "end": END,
-    },
-)
-
-# RAG pipeline
-builder.add_edge("retrieve", "rerank")
-builder.add_edge("rerank", "generate")
-
-builder.add_conditional_edges(
-    "rerank",
-    lambda s: "no_docs" if s.get("no_docs") else "ok",
-    {
-        "no_docs": "web_search",
-        "ok": "generate",
-    },
-)
-
-builder.add_edge("web_search", "generate")
-# builder.add_edge("web_search", "rerank")
-builder.add_edge("generate", "self_check")
-
-builder.add_conditional_edges(
-    "self_check",
-    check_grounding,
-    {
-        "retry": "retrieve",
-        "web": "web_search",
-        "done": END,
-    },
-)
-
-# Chat ends directly
-builder.add_edge("chat", END)
-
-graph = builder.compile()
-
-# print(graph.get_graph().print_ascii())
-
-
-if __name__ == '__main__':
-    chat_history = []
-    
-    while True:
-        user_input = input("User: ")
-
-        result = graph.invoke({
-                "query": user_input,
-                "rewritten_query": user_input,
-                "chat_history": chat_history,
-                "retries": 0,
-                "web_retries": 0,
-                "docs": [],
-                "no_docs": False,
-            })
-
-        answer = result.get('answer')
-    
-        if answer:
-            print("AI:", answer)
-        else:
-            break
-
-        chat_history.append((user_input, answer))
