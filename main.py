@@ -4,6 +4,8 @@ from nodes import (context_check_node, rewrite_node, router_node, retrieve_node,
                    rerank_node, generate_node, self_check_node, chat_node, route_decision, check_grounding
 )
 
+from logger import logger
+
 def create_graph():
     builder = StateGraph(AgentState)
 
@@ -71,12 +73,17 @@ def create_graph():
 if __name__ == '__main__':
     graph = create_graph()
     
-    # print(graph.get_graph().print_ascii())
-    
+    logger.info("--- Starting Agent Session ---")
     chat_history = []
     
     while True:
-        user_input = input("User: ")
+        user_input = input("\nUser: ")
+        
+        if user_input.lower() in ["exit", "quit", "bye"]:
+            logger.info("Session ended by user.")
+            break
+
+        logger.info(f"New Request Received: {user_input}")
 
         result = graph.invoke({
                 "query": user_input,
@@ -96,3 +103,5 @@ if __name__ == '__main__':
             break
 
         chat_history.append((user_input, answer))
+        
+        logger.success("Cycle Complete. Ready for next input.")

@@ -1,5 +1,6 @@
 
 from schema import AgentState, RouteDecision, GroundingCheck, ContextDecision
+from logger import logger
 
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -98,7 +99,9 @@ def router_node(state):
     Query:
     {state["rewritten_query"]}
     """)
-    print('\n\nroute', result.route)
+    
+    logger.success(f"Decision: Route to -> <magenta>{result.route.upper()}</magenta>")
+    
     return {"route": result.route}
 
 def retrieve_node(state: AgentState):
@@ -141,7 +144,9 @@ def rerank_node(state: AgentState):
     data = response.json()
 
     reranked = [docs[r["index"]] for r in data["results"]]
-    print(f'\n\nreranked', data)
+    
+    logger.success(f"Rerank complete. Kept {len(data['results'])} high-relevance chunks.")
+    
     return {"docs": reranked}
 
 def generate_node(state: AgentState): 
@@ -190,7 +195,12 @@ def self_check_node(state):
     Context:
     {context}
     """)
-    print('\n\ncheck', result.grounded)
+    
+    if result.grounded:
+        logger.success("Grounding Check: PASSED")
+    else:
+        logger.warning(f"Grounding Check: FAILED. Reason: {result.explanation}")
+    
     return {"check": result.grounded, "not_grounded_explanation": result.explanation}
 
 
@@ -243,7 +253,9 @@ def rewrite_node(state: AgentState):
     Query:
     {state['query']}
     """)
-    print('\n\nrewritten query', response.content)
+    
+    logger.info(f"Query Refinement: [<dim>{state['query']}</dim>] -> <yellow>{response.content}</yellow>")
+    
     return {"rewritten_query": response.content}
 
 def chat_node(state: AgentState):
