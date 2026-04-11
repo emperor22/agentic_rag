@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     COLLECTION_NAME: str = "pdf_collection"
     
     PDF_FILENAME: str = "memory_langchain.pdf"
+    
+    OPENROUTER_API_KEY: str
+    TAVILY_API_KEY: str
 
     class Config:
         env_file = ".env"

@@ -4,19 +4,12 @@ from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyMuPDFLoader
 
-from dotenv import load_dotenv
-import os
-
 from config import config
-
-load_dotenv()
-
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
 embeddings = OpenAIEmbeddings(
     model=config.EMBEDDING_MODEL,
     base_url=config.BASE_URL,
-    api_key=OPENROUTER_API_KEY,
+    api_key=config.OPENROUTER_API_KEY,
 )
 
 def load_and_split_pdf(file_path: str):

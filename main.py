@@ -24,19 +24,19 @@ def create_graph():
 
 
     builder.add_edge(START, "context_check")
-    builder.add_edge("context_check", "rewrite")
-    builder.add_edge("rewrite", "router")
+    builder.add_edge("context_check", "router")
 
     builder.add_conditional_edges(
         "router",
         route_decision,
         {
-            "rag": "retrieve",
+            "rag": "rewrite",
             "chat": "chat",
             "end": END,
         },
     )
 
+    builder.add_edge("rewrite", "retrieve")
     builder.add_edge("retrieve", "rerank")
     builder.add_edge("rerank", "generate")
 

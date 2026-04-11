@@ -8,23 +8,14 @@ from langchain_chroma import Chroma
 
 from tavily import TavilyClient
 from langchain_core.documents import Document
-from dotenv import load_dotenv
-
-import os
-from dotenv import load_dotenv
 
 from config import config
 
-
-load_dotenv()
-
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
-TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
     
 llm = ChatOpenAI(
     model=config.PRIMARY_MODEL,
     base_url=config.BASE_URL,
-    api_key=OPENROUTER_API_KEY,
+    api_key=config.OPENROUTER_API_KEY,
     temperature=0,
 )
 
@@ -32,7 +23,7 @@ llm = ChatOpenAI(
 embeddings = OpenAIEmbeddings(
     model=config.EMBEDDING_MODEL,
     base_url=config.BASE_URL,
-    api_key=OPENROUTER_API_KEY,
+    api_key=config.OPENROUTER_API_KEY,
 )
 
 vectorstore = Chroma(
@@ -43,7 +34,7 @@ vectorstore = Chroma(
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": config.RETRIEVER_K})
 
-tavily = TavilyClient(api_key=TAVILY_API_KEY)
+tavily = TavilyClient(api_key=config.TAVILY_API_KEY)
 
 
 
@@ -61,7 +52,7 @@ def web_search(query: str):
                 metadata={"source": r["url"]}
             )
         )
-    print('\n\ndocs web search', docs)
+
     return docs
 
 def web_search_node(state: AgentState):
@@ -73,40 +64,64 @@ def web_search_node(state: AgentState):
         "no_docs": False
     }
 
+def is_end_signal(text: str):
+    text = text.lower().strip()
+
+    end_phrases = [
+        "thanks", "thank you", "thx", "ok thanks", "got it",
+        "understood", "ok understood", "makes sense",
+        "bye", "goodbye", "see you", "that helps", "all good"
+    ]
+
+    return any(p in text for p in end_phrases)
+
 
 def router_node(state):
+    query = state["rewritten_query"]
+
+    if is_end_signal(query):
+        logger.success("Decision: Route to -> END (rule-based)")
+        return {"route": "end"}
+
     llm_structured = llm.with_structured_output(RouteDecision)
 
     result = llm_structured.invoke(f"""
-    Decide the intent:
+You are an intent classifier.
 
-    Examples:
-    Q: "What is LangChain?"
-    → rag
+Return ONLY one of: end, rag, chat.
 
-    Q: "hi how are you"
-    → chat
+Strict rules:
+- "end" → user expresses completion, satisfaction, or closing intent
+  (e.g., thanks, thank you, ok, understood, got it, makes sense, bye)
+- "rag" → factual question or knowledge retrieval
+- "chat" → casual conversation or small talk
 
-    Q: "bye"
-    → end
+Important:
+- If the message contains gratitude or acknowledgement WITHOUT a new question → end
+- If unsure between end and anything else → end
+- Do NOT choose rag unless a real question is asked
 
-    Rules:
-    - If factual → rag
-    - If conversational → chat
-    - If unclear → rag
-    - If user wants to stop -> end
+Examples:
+"bye" → end
+"ok thanks" → end
+"understood, thank you" → end
+"that helps" → end
 
-    Query:
-    {state["rewritten_query"]}
-    """)
-    
-    logger.success(f"Decision: Route to -> <magenta>{result.route.upper()}</magenta>")
-    
+"What is LangChain?" → rag
+"Explain vector databases" → rag
+
+"hi how are you" → chat
+"nice weather today" → chat
+
+Query:
+{query}
+""")
+
+    logger.success(f"Decision: Route to -> {result.route.upper()}")
     return {"route": result.route}
 
 def retrieve_node(state: AgentState):
     docs = retriever.invoke(state["rewritten_query"])
-    print('\n\ndocs', docs)
     return {
     "docs": docs,
     "source": "vectorstore",
@@ -127,7 +142,7 @@ def rerank_node(state: AgentState):
     response = requests.post(
         config.BASE_URL_RERANK,
         headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         },
         json={
@@ -174,7 +189,7 @@ def generate_node(state: AgentState):
     return {"answer": response.content}
 
 
-def self_check_node(state):
+def self_check_node(state: AgentState):
     if state["answer"] == "I don't know":
         return {"check": False, "not_grounded_explanation": "not enough context"}
     
@@ -204,7 +219,7 @@ def self_check_node(state):
     return {"check": result.grounded, "not_grounded_explanation": result.explanation}
 
 
-def check_grounding(state):
+def check_grounding(state: AgentState):
     if state.get("check"):
         return "done"
     
@@ -224,7 +239,7 @@ def check_grounding(state):
 
     return "done"
 
-def context_check_node(state):
+def context_check_node(state: AgentState):
     llm_structured = llm.with_structured_output(ContextDecision)
 
     result = llm_structured.invoke(f"""
@@ -234,9 +249,8 @@ def context_check_node(state):
     {state.get("chat_history", [])[-config.CHAT_HISTORY_WINDOW:]}
 
     Query:
-    {state["rewritten_query"]}
+    {state["query"]}
     """)
-    print('\n\nuse history', result.use_history)
     return {"use_history": result.use_history}
 
 def rewrite_node(state: AgentState):
@@ -254,7 +268,7 @@ def rewrite_node(state: AgentState):
     {state['query']}
     """)
     
-    logger.info(f"Query Refinement: [<dim>{state['query']}</dim>] -> <yellow>{response.content}</yellow>")
+    logger.info(f"Query Refinement: [{state['query']}] -> {response.content}")
     
     return {"rewritten_query": response.content}
 
@@ -268,7 +282,7 @@ def chat_node(state: AgentState):
     User:
     {state['query']}
     """)
-    print('\n\nanswer', response.content)
+
     return {"answer": response.content}
 
 def route_decision(state: AgentState):
