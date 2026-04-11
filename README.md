@@ -10,7 +10,7 @@ This repository contains an autonomous RAG (Retrieval-Augmented Generation) agen
 * **Self-Correction Loop**: Validates the generated answer against the context. If the answer is not grounded or context is missing, the agent automatically triggers a **Tavily Web Search** fallback.
 * **Structured Logging**: Professional observability using `Loguru` to track state transitions and LLM decisions in real-time.
 
----
+
 
 ## Graph
 
@@ -25,7 +25,7 @@ This repository contains an autonomous RAG (Retrieval-Augmented Generation) agen
 - **Search API**: Tavily
 - **Reranker**: Cohere Rerank-4-fast
 
----
+
 
 ## Project Structure
 
@@ -39,7 +39,7 @@ This repository contains an autonomous RAG (Retrieval-Augmented Generation) agen
 └── chroma_db/          # Persistent vector database storage
 ```
 
----
+
 
 ## Quick Start
 
@@ -67,7 +67,7 @@ Start the interactive session:
 python main.py
 ```
 
----
+
 
 ## Pipeline Logic
 
@@ -82,7 +82,6 @@ The agent follows a sophisticated state machine flow:
     * If **Not Grounded/No Docs**: Triggers Web Search and regenerates.
     * If **Max Retries Reached**: Gracefully fails.
 
----
 
 ## Observability
 The project uses `Loguru` for clean, color-coded console output. This allows developers to see exactly why the agent chose a specific route or why a grounding check failed during execution.
