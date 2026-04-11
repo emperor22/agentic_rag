@@ -2,9 +2,6 @@
 
 This repository contains an autonomous RAG (Retrieval-Augmented Generation) agent built with **LangGraph**. It features dynamic routing, standalone query rewriting, document reranking, and a self-correction loop to ensure grounded, hallucination-free answers.
 
-<img width="428" height="940" alt="image" src="https://github.com/user-attachments/assets/fb791214-2ac4-42ec-981f-274a5215dbde" />
-
-
 ## Key Features
 
 * **Adaptive Routing**: Uses an LLM router to decide between local PDF knowledge (RAG), general conversation (Chat), or ending the session.
@@ -14,6 +11,10 @@ This repository contains an autonomous RAG (Retrieval-Augmented Generation) agen
 * **Structured Logging**: Professional observability using `Loguru` to track state transitions and LLM decisions in real-time.
 
 ---
+
+## Graph
+
+<img width="428" height="940" alt="image" src="https://github.com/user-attachments/assets/fb791214-2ac4-42ec-981f-274a5215dbde" />
 
 ## Tech Stack
 
